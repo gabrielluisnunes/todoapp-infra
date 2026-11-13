@@ -15,7 +15,7 @@ services:
     build:
       context: ./backend  # Diretório do backend
     ports:
-      - "5000:5000"  # Expõe a porta 5000 do contêiner para a porta 5000 do host
+      - "5050:5000"  # Expõe a porta 5000 do contêiner para a porta 5000 do host
     networks:
       - todo-net
     depends_on:
@@ -33,8 +33,12 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=rootpassword
       - MONGO_INITDB_DATABASE=todo-app
-
+    volumes:
+      - mongo-data:/data/db
 
 networks:
   todo-net:
     driver: bridge
+    
+volumes:
+    mongo-data:
