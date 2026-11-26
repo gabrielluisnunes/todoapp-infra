@@ -2,41 +2,38 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || '';
+
 function App() {
   const [todos, setTodos] = useState([]);
   const [task, setTask] = useState("");
 
-  // Função para carregar os todos da API
   const fetchTodos = async () => {
-    const response = await axios.get('http://localhost:5050/todos');
+    const response = await axios.get(`${API_BASE}/todos`);
     setTodos(response.data);
   };
 
-  // Função para adicionar uma nova tarefa
   const addTodo = async () => {
-    if (task.trim()) {
-      const response = await axios.post('http://localhost:5050/todos', { text: task });
+    if (task.tr()) {
+      const response = await axios.post(`${API_BASE}/todos`, { text: task });
       setTodos([...todos, response.data]);
       setTask("");
     }
   };
 
-  // Função para marcar a tarefa como concluída
   const toggleComplete = async (id) => {
-    const response = await axios.patch(`http://localhost:5050/todos/${id}`);
+    const response = await axios.patch(`${API_BASE}/todos/${id}`);
     const updatedTodos = todos.map(todo =>
       todo._id === id ? response.data : todo
     );
     setTodos(updatedTodos);
   };
 
-  // Função para excluir a tarefa
   const deleteTodo = async (id) => {
-    await axios.delete(`http://localhost:5050/todos/${id}`);
+    await axios.delete(`${API_BASE}/todos/${id}`);
     setTodos(todos.filter(todo => todo._id !== id));
   };
 
-  // Carregar a lista de todos ao iniciar o componente
   useEffect(() => {
     fetchTodos();
   }, []);
