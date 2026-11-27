@@ -139,9 +139,9 @@ jobs:
       - name: Validar saúde da aplicação via ALB
         run: |
           for i in $(seq 1 12); do
-            if curl -sf "http://${{ steps.tf_out.outputs.alb_dns }}/health"; then
+            if curl -sf "https://todoapp.gabrielnunes.dev/health"; then
               echo ""
-              echo "Aplicação saudável em http://${{ steps.tf_out.outputs.alb_dns }}"
+              echo "Aplicação saudável em https://todoapp.gabrielnunes.dev"
               exit 0
             fi
             echo "Aguardando healthcheck do ALB... tentativa $i/12"

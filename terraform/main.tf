@@ -285,8 +285,12 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -316,6 +320,7 @@ resource "aws_lb_target_group_attachment" "app" {
 # ---------- VM do MongoDB (exclusiva) ----------
 resource "aws_instance" "db" {
   ami                    = data.aws_ami.al2023.id
+  iam_instance_profile   = aws_iam_instance_profile.db_backup.name
   instance_type          = var.db_instance_type
   subnet_id              = aws_subnet.private[0].id
   key_name               = aws_key_pair.main.key_name
