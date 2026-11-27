@@ -12,3 +12,5 @@ Thumbs.db
 *.tfstate
 *.tfstate.*
 *.tfvarsansible/inventory.ini
+
+ansible/inventory.ini

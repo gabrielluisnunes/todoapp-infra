@@ -1,0 +1,12 @@
+---
+- name: Atualizar pacotes do sistema operacional
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+  when: update_os | default(true) | bool
+
+- name: Instalar pacotes extras
+  ansible.builtin.dnf:
+    name: "{{ extra_packages.split(',') | map('trim') | reject('equalto', '') | list if extra_packages is string else extra_packages }}"
+    state: present
+  when: (extra_packages | default('')) | length > 0

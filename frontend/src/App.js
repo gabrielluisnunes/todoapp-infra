@@ -14,7 +14,7 @@ function App() {
   };
 
   const addTodo = async () => {
-    if (task.tr()) {
+    if (task.trim()) {
       const response = await axios.post(`${API_BASE}/todos`, { text: task });
       setTodos([...todos, response.data]);
       setTask("");

@@ -1,0 +1,88 @@
+---
+- name: Configurar banco de dados (EBS + MongoDB)
+  when: "'db' in group_names"
+  block:
+    - name: Verificar se o disco EBS /dev/nvme1n1 já possui sistema de arquivos
+      ansible.builtin.command: blkid /dev/nvme1n1
+      register: ebs_blkid
+      failed_when: false
+      changed_when: false
+
+    - name: Formatar disco EBS /dev/nvme1n1 em ext4
+      ansible.builtin.command: mkfs.ext4 /dev/nvme1n1
+      when: ebs_blkid.rc != 0
+
+    - name: Criar diretório de montagem do MongoDB
+      ansible.builtin.file:
+        path: /mnt/mongo-data
+        state: directory
+        mode: "0755"
+
+    - name: Montar disco EBS em /mnt/mongo-data (persistente no fstab)
+      ansible.posix.mount:
+        path: /mnt/mongo-data
+        src: /dev/nvme1n1
+        fstype: ext4
+        state: mounted
+
+    - name: Criar diretório do MongoDB
+      ansible.builtin.file:
+        path: /opt/todoapp-db
+        state: directory
+        mode: "0755"
+
+    - name: Copiar script inicial do MongoDB
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../banco-de-dados/init-mongo.js"
+        dest: /opt/todoapp-db/init-mongo.js
+        mode: "0644"
+
+    - name: Gerar docker-compose.yml do banco
+      ansible.builtin.template:
+        src: db-compose.yml.j2
+        dest: /opt/todoapp-db/docker-compose.yml
+        mode: "0600"
+      no_log: true
+
+    - name: Subir container do MongoDB
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: /opt/todoapp-db
+      register: db_up
+      changed_when: "'Started' in db_up.stderr or 'Created' in db_up.stderr or 'Recreated' in db_up.stderr"
+
+- name: Configurar aplicação (Backend + Frontend)
+  when: "'app' in group_names"
+  block:
+    - name: Criar diretório da aplicação
+      ansible.builtin.file:
+        path: /opt/todoapp
+        state: directory
+        mode: "0755"
+
+    - name: Login no GHCR (quando token informado)
+      ansible.builtin.shell: echo "{{ ghcr_token }}" | docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
+      when: (ghcr_token | default('')) | length > 0
+      no_log: true
+      changed_when: false
+
+    - name: Gerar docker-compose.yml da aplicação
+      ansible.builtin.template:
+        src: app-compose.yml.j2
+        dest: /opt/todoapp/docker-compose.yml
+        mode: "0600"
+      no_log: true
+
+    - name: Baixar imagens da aplicação
+      ansible.builtin.command: docker compose pull
+      args:
+        chdir: /opt/todoapp
+      register: app_pull
+      changed_when: "'Downloaded' in app_pull.stderr or 'Pull complete' in app_pull.stderr"
+
+    - name: Subir containers da aplicacao
+      ansible.builtin.command: docker compose up -d --remove-orphans
+      args:
+        chdir: /opt/todoapp
+      register: app_up
+      changed_when: "'Started' in app_up.stderr or 'Created' in app_up.stderr or 'Recreated' in app_up.stderr"

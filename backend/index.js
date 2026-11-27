@@ -28,7 +28,7 @@ const TodoSchema = new mongoose.Schema({
 const Todo = mongoose.model('Todo', TodoSchema);
 
 app.get('/health', (req, res) => {
-  const dbConnecte= mongoose.connection.readyState === 1;
+  const dbConnected = mongoose.connection.readyState === 1;
   if (!dbConnected) {
     return res.status(503).json({ status: 'error', db: 'disconnected' });
   }

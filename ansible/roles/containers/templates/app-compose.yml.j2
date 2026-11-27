@@ -1,0 +1,26 @@
+services:
+  backend:
+    image: "{{ docker_image }}-backend:{{ docker_tag }}"
+    container_name: todoapp-backend
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      MONGO_URI: "mongodb://{{ mongo_user }}:{{ mongo_password | urlencode }}@{{ hostvars[groups['db'][0]]['ansible_host'] }}:27017/todo-app?authSource=admin"
+      CORS_ORIGIN: "{{ cors_origin | default('') }}"
+    networks:
+      - todo-net
+
+  frontend:
+    image: "{{ docker_image }}-frontend:{{ docker_tag }}"
+    container_name: todoapp-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - todo-net
+
+networks:
+  todo-net:
+    driver: bridge

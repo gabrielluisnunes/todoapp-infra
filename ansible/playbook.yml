@@ -1,0 +1,31 @@
+---
+- name: Configurar sistema e Docker em todos os servidores
+  hosts: all
+  become: true
+  vars:
+    update_os: true
+    extra_packages: ""
+  roles:
+    - os_updates
+    - docker
+
+- name: Subir banco de dados MongoDB com disco EBS
+  hosts: db
+  become: true
+  vars:
+    mongo_user: "{{ lookup('env', 'MONGO_USER') | default('todoapp_admin', true) }}"
+    mongo_password: "{{ lookup('env', 'MONGO_PASSWORD') }}"
+  roles:
+    - containers
+
+- name: Subir aplicação (Frontend + Backend)
+  hosts: app
+  become: true
+  vars:
+    docker_image: "ghcr.io/gabrielluisnunes/todoapp"
+    docker_tag: "v1.0.0"
+    mongo_user: "{{ lookup('env', 'MONGO_USER') | default('todoapp_admin', true) }}"
+    mongo_password: "{{ lookup('env', 'MONGO_PASSWORD') }}"
+    cors_origin: ""
+  roles:
+    - containers
