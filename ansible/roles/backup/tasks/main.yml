@@ -1,0 +1,36 @@
+---
+- name: Instalar cronie e awscli na VM do banco
+  ansible.builtin.dnf:
+    name:
+      - cronie
+      - awscli
+    state: present
+
+- name: Garantir serviço crond ativo
+  ansible.builtin.systemd:
+    name: crond
+    enabled: true
+    state: started
+
+- name: Criar script de backup do MongoDB para o S3
+  ansible.builtin.copy:
+    dest: /usr/local/bin/mongo-backup.sh
+    owner: root
+    group: root
+    mode: "0700"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      STAMP=$(date +%Y-%m-%d_%H-%M-%S)
+      BUCKET="{{ backup_bucket }}"
+      docker exec todoapp-mongo sh -c 'mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --archive --gzip' \
+        | aws s3 cp - "s3://${BUCKET}/backups/mongo-${STAMP}.archive.gz" --region us-east-2
+      echo "Backup salvo em s3://${BUCKET}/backups/mongo-${STAMP}.archive.gz"
+
+- name: Agendar backup dirio às 03:00
+  ansible.builtin.cron:
+    name: "Backup diario MongoDB para S3"
+    minute: "0"
+    hour: "3"
+    user: root
+    job: "/usr/local/bin/mongo-backup.sh >> /var/log/mongo-backup.log 2>&1"
