@@ -32,7 +32,7 @@ app.get('/health', (req, res) => {
   if (!dbConnected) {
     return res.status(503).json({ status: 'error', db: 'disconnected' });
   }
-  return res.status(200).json({ status: 'ok', db: 'connected' });
+  return res.status(200).json({ status: 'ok', db: 'connected', version: 'v1.0.1' });
 });
 
 app.get('/todos', async (req, res) => {
