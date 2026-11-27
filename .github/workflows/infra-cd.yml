@@ -30,7 +30,7 @@ on:
         description: 'Tag da imagem Docker (ex: v1.0.0)'
         type: string
         default: 'v1.0.0'
-        requiretrue
+        required: true
       update_os:
         description: 'Atualizar pacotes do sistema operacional'
         type: boolean
@@ -65,7 +65,7 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_environment: ${{ inputs.environment }}
-          TF_VAR_instan_name: ${{ inputs.instance_name }}
+          TF_VAR_instance_name: ${{ inputs.instance_name }}
           TF_VAR_instance_type: ${{ inputs.instance_type }}
           TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
