@@ -15,8 +15,10 @@
   vars:
     mongo_user: "{{ lookup('env', 'MONGO_USER') | default('todoapp_admin', true) }}"
     mongo_password: "{{ lookup('env', 'MONGO_PASSWORD') }}"
+    backup_bucket: "todoapp-dev-backups-335451782901"
   roles:
     - containers
+    - backup
 
 - name: Subir aplicação (Frontend + Backend)
   hosts: app
