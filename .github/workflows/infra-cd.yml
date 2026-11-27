@@ -1,0 +1,150 @@
+name: Infraestrutura e Deploy (Terraform + Ansible)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente (dev ou prod)'
+        type: choice
+        options:
+          - dev
+          - prod
+        default: 'dev'
+        required: true
+      instance_name:
+        description: 'Prefixo do nome dos recursos'
+        type: string
+        default: 'todoapp'
+        required: true
+      instance_type:
+        description: 'Tipo da instância EC2 da aplicação'
+        type: string
+        default: 't3.micro'
+        required: true
+      docker_image:
+        description: 'Prefixo da imagem Docker (ex: ghcr.io/gabrielluisnunes/todoapp)'
+        type: string
+        default: 'ghcr.io/gabrielluisnunes/todoapp'
+        required: true
+      docker_tag:
+        description: 'Tag da imagem Docker (ex: v1.0.0)'
+        type: string
+        default: 'v1.0.0'
+        requiretrue
+      update_os:
+        description: 'Atualizar pacotes do sistema operacional'
+        type: boolean
+        default: true
+        required: true
+      extra_packages:
+        description: 'Pacotes extras separados por vírgula (ex: htop,curl)'
+        type: string
+        default: ''
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init, Validate e Plan
+        working-directory: terraform
+        env:
+          TF_VAR_environment: ${{ inputs.environment }}
+          TF_VAR_instan_name: ${{ inputs.instance_name }}
+          TF_VAR_instance_type: ${{ inputs.instance_type }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: |
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          TF_VAR_environment: ${{ inputs.environment }}
+          TF_VAR_instance_name: ${{ inputs.instance_name }}
+          TF_VAR_instance_type: ${{ inputs.instance_type }}
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Capturar outputs do Terraform e gerar inventory do Ansible
+        id: tf_out
+        working-directory: terraform
+        run: |
+          BASTION_IP=$(terraform output -raw bastion_public_ip)
+          APP_IP=$(terraform output -raw app_private_ip)
+          DB_IP=$(terraform output -raw db_private_ip)
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+          echo "alb_dns=${ALB_DNS}" >> "$GITHUB_OUTPUT"
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/pm04
+          chmod 600 ~/.ssh/pm04
+
+          cat <<INV > ../ansible/inventory.ini
+          [app]
+          todoapp-app ansible_host=${APP_IP}
+
+          [db]
+          todoapp-db ansible_host=${DB_IP}
+
+          [all:vars]
+          ansible_user=ec2-user
+          ansible_ssh_private_key_file=~/.ssh/pm04
+          ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ~/.ssh/pm04 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ec2-user@${BASTION_IP}"'
+          INV
+
+      - name: Instalar Ansible
+        run: pip install ansible
+
+      - name: Aguardar SSH nas VMs privadas
+        working-directory: ansible
+        run: |
+          for i in $(seq 1 12); do
+            if ansible all -m ping; then
+              exit 0
+            fi
+            echo "Aguardando SSH... tentativa $i/12"
+            sleep 10
+          done
+          exit 1
+
+      - name: Executar Ansible Playbook
+        working-directory: ansible
+        env:
+          MONGO_USER: ${{ secrets.MONGO_USER }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+        run: |
+          ansible-playbook playbook.yml \
+            -e "update_os=${{ inputs.update_os }}" \
+            -e "extra_packages=${{ inputs.extra_packages }}" \
+            -e "docker_image=${{ inputs.docker_image }}" \
+            -e "docker_tag=${{ inputs.docker_tag }}"
+
+      - name: Validar saúde da aplicação via ALB
+        run: |
+          for i in $(seq 1 12); do
+            if curl -sf "http://${{ steps.tf_out.outputs.alb_dns }}/health"; then
+              echo ""
+              echo "Aplicação saudável em http://${{ steps.tf_out.outputs.alb_dns }}"
+              exit 0
+            fi
+            echo "Aguardando healthcheck do ALB... tentativa $i/12"
+            sleep 10
+          done
+          exit 1
